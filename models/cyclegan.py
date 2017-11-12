@@ -48,13 +48,32 @@ class CycleGAN:
         disc_A_loss = discriminator_loss(self.disc_A, A, gen_A)
         disc_B_loss = discriminator_loss(self.disc_B, B, gen_B)
 
-        gen_A_loss = l1_loss(self.gen_A(gen_B), A) + adversarial_loss(self.disc_A, gen_A)
-        gen_B_loss = l1_loss(self.gen_B(gen_A), B) + adversarial_loss(self.disc_B, gen_B)
+        cyclic_loss_ABA = l1_loss(self.gen_A(gen_B), A)
+        cyclic_loss_BAB = l1_loss(self.gen_B(gen_A), B)
+        
+        gen_loss_A = adversarial_loss(self.disc_A, gen_A)
+        gen_loss_B = adversarial_loss(self.disc_B, gen_B)
+        
+        gen_loss = gen_loss_A + gen_loss_B + cyclic_loss_ABA + cyclic_loss_BAB
 
         train_op = tf.group(
-            minimize(gen_A_loss + gen_B_loss, self.gen_A.vars + self.gen_B.vars),
+            minimize(gen_loss, self.gen_A.vars + self.gen_B.vars),
             minimize(disc_A_loss, self.disc_A.vars),
             minimize(disc_B_loss, self.disc_B.vars),
             tf.assign_add(global_step, 1)
         )
+        
+        tf.summary.scalar('disc_A_loss', disc_A_loss)
+        tf.summary.scalar('disc_B_loss', disc_B_loss)
+        tf.summary.scalar('gen_loss', gen_loss)
+        tf.summary.scalar('gen_loss_A', gen_loss_A)
+        tf.summary.scalar('gen_loss_B', gen_loss_B)
+        tf.summary.scalar('cyclic_loss_ABA', cyclic_loss_ABA)
+        tf.summary.scalar('cyclic_loss_BAB', cyclic_loss_BAB)
+        
+        tf.summary.image('gen_A', gen_A)
+        tf.summary.image('gen_B', gen_B)
+        tf.summary.image('A', A)
+        tf.summary.image('B', B)
+        
         return train_op
