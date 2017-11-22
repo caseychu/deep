@@ -1,1 +1,1 @@
-from deep.scope import component, model, op
+from deep.scope import component, op

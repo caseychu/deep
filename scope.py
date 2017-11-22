@@ -1,29 +1,8 @@
 import tensorflow as tf
 import functools
-    
-# A Component builds a graph with variables.
 
-# A Model is a collection of Components with a training procedure.
-
-# A component is a graph that contains variables that will be reused.
-def component(build_component):
-    
-    class Component:
-        def __init__(self, **auto_kwargs):
-            self.auto_kwargs = auto_kwargs
-        
-        def __call__(self, *args, **kwargs):
-            if self.auto_kwargs:
-                auto_kwargs = self.auto_kwargs.copy()
-                auto_kwargs.update(kwargs)
-                kwargs = auto_kwargs
-            return build_component(*args, **kwargs)
-    
-    Component.__name__ = build_component.__name__
-    return model(Component, default_method='__call__')
-
-# Wraps a function so that variables are namespaced.
 def op(f):
+    """Wraps a function so that variables are namespaced."""
     @functools.wraps(f)
     def f_with_scope(*args, **kwargs):
         with tf.variable_scope(None, default_name=f.__name__) as scope:
@@ -31,8 +10,15 @@ def op(f):
                 return f(*args, **kwargs)
     return f_with_scope
 
-# Wraps a class method so that variables are namespaced.
-def model(cls, default_method='__init__'):
+
+def component(cls):
+    """Wraps a class so that variables are namespaced."""
+    default_method = None
+    #if '__init__' in cls.__dict__:
+    #    default_method = '__init__'
+    #elif '__call__' in cls.__dict__:
+    #    default_method = '__call__'
+    # This is dangerous, since if you add an __init__ method, your old models stop working.
     
     # Decorate every class method.
     for name in cls.__dict__:
@@ -42,13 +28,19 @@ def model(cls, default_method='__init__'):
                 setattr(cls, name, scope_method(method, None))
             else:
                 setattr(cls, name, scope_method(method, name))
+    
+    # Copy from Component.
+    for name in Component.__dict__:
+        method = getattr(cls, name)
+        if callable(method):
+            setattr(cls, name, method)
 
+    return cls
+
+class Component:
     @property
     def vars(self):
-        return get_variables(self._scope.name + '/')
-    cls.vars = vars
-    
-    return cls
+        return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self._scope.name + '/')
 
 def scope_method(method, name):
 
@@ -81,5 +73,9 @@ def scope_method(method, name):
 
     return wrapped_method
 
-def get_variables(scope=None):
-    return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope)
+#def get_hyperparam(*args, **kwargs):
+#    kwargs['trainable'] = False
+#    if 'collections' not in kwargs:
+#        kwargs['collections'] = [tf.GraphKeys.GLOBAL_VARIABLES]
+#    kwargs['collections'].add('hyperparams')
+#    return tf.get_variable(*args, **kwargs)
