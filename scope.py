@@ -28,19 +28,8 @@ def component(cls):
                 setattr(cls, name, scope_method(method, None))
             else:
                 setattr(cls, name, scope_method(method, name))
-    
-    # Copy from Component.
-    for name in Component.__dict__:
-        method = getattr(cls, name)
-        if callable(method):
-            setattr(cls, name, method)
 
     return cls
-
-class Component:
-    @property
-    def vars(self):
-        return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self._scope.name + '/')
 
 def scope_method(method, name):
 
@@ -53,7 +42,7 @@ def scope_method(method, name):
                 self._subscopes = {}
         
         # Initialize the method scope
-        if method not in self._subscopes:
+        if method.__name__ not in self._subscopes:
             with tf.variable_scope(self._scope):
                 with tf.name_scope(self._scope.name + '/'):
                     if name:
@@ -63,15 +52,30 @@ def scope_method(method, name):
                     else:
                         method_scope = self._scope
                         out = method(self, *args, **kwargs)
-            self._subscopes[method] = method_scope
+            self._subscopes[method.__name__] = method_scope
             return out
 
-        method_scope = self._subscopes[method]
+        method_scope = self._subscopes[method.__name__]
         with tf.variable_scope(method_scope, reuse=True):
             with tf.name_scope(method_scope.name + '/'):
                 return method(self, *args, **kwargs)
-
+            
     return wrapped_method
+
+def variables(instance_or_instance_method, key=tf.GraphKeys.TRAINABLE_VARIABLES):
+    if hasattr(instance_or_instance_method, '_scope'):
+        self = instance_or_instance_method
+        return tf.get_collection(key, self._scope.name + '/')
+    elif hasattr(instance_or_instance_method, 'im_self'):
+        method = instance_or_instance_method.im_func
+        self = instance_or_instance_method.im_self
+        if method.__name__ in self._subscopes:
+            return tf.get_collection(key, self._subscopes[method.__name__].name + '/')
+        return []
+    else:
+        raise TypeError('Object does not appear to be an instance or instance method.')
+
+    
 
 #def get_hyperparam(*args, **kwargs):
 #    kwargs['trainable'] = False
