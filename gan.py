@@ -27,4 +27,5 @@ def discriminator_lsgan_loss(disc, x_real, x_fake):
 
 @op
 def adversarial_lsgan_loss(disc, x):
-    return -tf.reduce_mean(disc(x)**2)
+    prob_real = disc(x)
+    return tf.reduce_mean((prob_real - tf.ones_like(prob_real))**2)

@@ -39,18 +39,28 @@ def discriminate(image):
 @op
 def learning_rate(lr, global_step):
     """Constant for first 100 epochs, then linearly decay over next 100 epochs"""
-    const_steps = tf.constant(100000, dtype=global_step.dtype)  # 100 epochs
-    decay_steps = tf.constant(100000, dtype=global_step.dtype)  # 100 epochs
+    num_data = 1096
+    const_steps = tf.constant(1096 * 100, dtype=global_step.dtype)  # 100 epochs
+    decay_steps = tf.constant(1096 * 100, dtype=global_step.dtype)  # 100 epochs
     linear_decay = lr * tf.cast(tf.truediv(const_steps + decay_steps - global_step, decay_steps), dtype=tf.float32)
     lr = tf.minimum(lr, linear_decay)
     lr = tf.maximum(lr, 0.)
     return lr
 
+@op
+def buffered(x, capacity=50):
+    if capacity == 0:
+        return x
+
+    buffer = tf.RandomShuffleQueue(capacity, 0, dtypes=[x.dtype], shapes=[x.shape[1:]])
+    enqueue = buffer.enqueue_many(x)
+    qr = tf.train.QueueRunner(buffer, [enqueue])
+    tf.train.add_queue_runner(qr)
+    return buffer.dequeue_many(x.shape[0])
+
 @component
 class CycleGAN:
-    """Implements CycleGAN (arxiv:1703.10593).
-    
-    The image buffer is currently not implemented."""
+    """Implements CycleGAN (arxiv:1703.10593)."""
 
     def gen_A(self, B):
         return generate(B)
@@ -70,8 +80,8 @@ class CycleGAN:
         ABA = self.gen_A(BA)
         BAB = self.gen_B(AB)
 
-        disc_A_loss = discriminator_lsgan_loss(self.disc_A, A, AB)
-        disc_B_loss = discriminator_lsgan_loss(self.disc_B, B, BA)
+        disc_A_loss = discriminator_lsgan_loss(self.disc_A, A, buffered(AB))
+        disc_B_loss = discriminator_lsgan_loss(self.disc_B, B, buffered(BA))
 
         cyclic_loss_ABA = l1_loss(ABA, A)
         cyclic_loss_BAB = l1_loss(BAB, B)
@@ -80,7 +90,7 @@ class CycleGAN:
         cycle_consistency_strength = 10.
         gen_loss = gen_loss_A + gen_loss_B + cycle_consistency_strength * (cyclic_loss_ABA + cyclic_loss_BAB)
 
-        optimizer = tf.train.AdamOptimizer
+        optimizer = lambda lr: tf.train.AdamOptimizer(lr, beta1=.5)
         gen_lr = learning_rate(0.0002, global_step)
         disc_lr = learning_rate(0.0001, global_step)
         train_op = tf.group(
@@ -103,9 +113,11 @@ class CycleGAN:
         tf.summary.scalar('gen/loss_B', gen_loss_B)
         tf.summary.scalar('gen/loss_ABA', cyclic_loss_ABA)
         tf.summary.scalar('gen/loss_BAB', cyclic_loss_BAB)
-        tf.summary.scalar('disc/prob_AB', tf.reduce_mean(tf.sigmoid(self.disc_A(AB))))
-        tf.summary.scalar('disc/prob_BA', tf.reduce_mean(tf.sigmoid(self.disc_B(BA))))
-        tf.summary.scalar('disc/prob_A', tf.reduce_mean(tf.sigmoid(self.disc_A(A))))
-        tf.summary.scalar('disc/prob_B', tf.reduce_mean(tf.sigmoid(self.disc_B(B))))
+        tf.summary.scalar('disc/prob_AB', tf.reduce_mean(self.disc_A(AB)))
+        tf.summary.scalar('disc/prob_BA', tf.reduce_mean(self.disc_B(BA)))
+        tf.summary.scalar('disc/prob_A', tf.reduce_mean(self.disc_A(A)))
+        tf.summary.scalar('disc/prob_B', tf.reduce_mean(self.disc_B(B)))
         
-        return train_op        
+        return train_op
+        
+        
