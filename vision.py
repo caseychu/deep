@@ -52,16 +52,9 @@ def conv2d_with_pad_reflect(image, filters, kernel_size, strides, *args, **kwarg
     padding = np.maximum(padding, 0)
     padding = np.concatenate([[0], padding, [0]], 0)
     paddings = np.transpose([padding // 2, padding - padding // 2])
-    print paddings
-    #paddings = tf.Print(paddings, [paddings])
-    out = tf.pad(image, paddings, mode='reflect')
-    #out.set_shape([image.shape[0], None, None, image.shape[3]])
     
+    out = tf.pad(image, paddings, mode='reflect')
     out = tf.layers.conv2d(out, filters, kernel_size.tolist(), strides.tolist(), *args, **kwargs)
-    #out.set_shape([None, ?, ?, None])
     return out
-
-#out_height = ceil(float(in_height) / float(strides[1]))
-#out_width  = ceil(float(in_width) / float(strides[2]))
 
 
