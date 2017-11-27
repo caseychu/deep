@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from deep import op
 
@@ -19,7 +20,7 @@ def cna_layer(image, filters, kernel_size, stride, transpose=False,
               activation=tf.nn.elu, normalization=instance_normalization):
     out = image
     if not transpose:
-        out = tf.layers.conv2d(out, filters, kernel_size, stride, padding='same')
+        out = conv2d_with_pad_reflect(out, filters, kernel_size, stride)
     else:
         out = tf.layers.conv2d_transpose(out, filters, kernel_size, stride, padding='same')
 
@@ -32,9 +33,35 @@ def cna_layer(image, filters, kernel_size, stride, transpose=False,
 @op
 def res_layer(image, filters):
     inp = image
-    out = tf.layers.conv2d(inp, 128, 3, 1, padding='same')
+    out = conv2d_with_pad_reflect(inp, 128, 3, 1)
     out = instance_normalization(out)
     out = tf.nn.relu(out)
-    out = tf.layers.conv2d(out, 128, 3, 1, padding='same')
+    out = conv2d_with_pad_reflect(out, 128, 3, 1)
     out = instance_normalization(out)
     return inp + out
+
+@op
+def conv2d_with_pad_reflect(image, filters, kernel_size, strides, *args, **kwargs):
+    shape = image.shape.as_list()[1:3]
+    strides = np.array(strides)
+    kernel_size = np.array(kernel_size)
+    
+    # Compute the necessary padding.
+    # Algorithm is from [https://www.tensorflow.org/api_guides/python/nn#Notes_on_SAME_Convolution_Padding]
+    padding = kernel_size - np.where(np.equal(shape % strides, 0), strides, shape)
+    padding = np.maximum(padding, 0)
+    padding = np.concatenate([[0], padding, [0]], 0)
+    paddings = np.transpose([padding // 2, padding - padding // 2])
+    print paddings
+    #paddings = tf.Print(paddings, [paddings])
+    out = tf.pad(image, paddings, mode='reflect')
+    #out.set_shape([image.shape[0], None, None, image.shape[3]])
+    
+    out = tf.layers.conv2d(out, filters, kernel_size.tolist(), strides.tolist(), *args, **kwargs)
+    #out.set_shape([None, ?, ?, None])
+    return out
+
+#out_height = ceil(float(in_height) / float(strides[1]))
+#out_width  = ceil(float(in_width) / float(strides[2]))
+
+
