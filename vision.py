@@ -57,4 +57,30 @@ def conv2d_with_pad_reflect(image, filters, kernel_size, strides, *args, **kwarg
     out = tf.layers.conv2d(out, filters, kernel_size.tolist(), strides.tolist(), *args, **kwargs)
     return out
 
+@op
+def get_whitening_params(data):
+    reshaped_data = tf.layers.flatten(data)
+    mean = tf.reduce_mean(reshaped_data, axis=0)
+    s, u, v = tf.svd(reshaped_data - mean, full_matrices=False)
+    #whitened_data = tf.reshape(tf.sqrt(tf.shape(data)[0] - 1.) * tf.matmul(u, v, transpose_b=True), tf.shape(data))
+    return [mean, v, s, tf.shape(data)[0]]
+
+def get_whitening_params_np(data):
+    reshaped_data = np.reshape(data, [data.shape[0], -1])
+    mean = np.mean(reshaped_data, axis=0)
+    u, s, vt = np.linalg.svd(reshaped_data - mean, full_matrices=False)
+    #whitened_data = np.reshape(np.sqrt(data.shape[0] - 1.) * np.dot(u, vt), data.shape)
+    return [mean, vt.T, s, data.shape[0]]
+
+@op
+def zca_whiten(data, mean, v, s, num_data_from_covariance_estimator, eps=1e-6):
+    reshaped_data = tf.layers.flatten(data)
+    whitened_data = tf.einsum(',ij,jk,lk->il', tf.sqrt(tf.cast(num_data_from_covariance_estimator - 1, tf.float32)), reshaped_data - mean, v, v / (s + eps))
+    return tf.reshape(whitened_data, tf.shape(data))
+
+@op
+def pca_whiten(data, mean, v, s, num_data_from_covariance_estimator, eps=1e-6):
+    reshaped_data = tf.layers.flatten(data)
+    whitened_data = tf.einsum(',ik,lk->il', tf.sqrt(tf.cast(num_data_from_covariance_estimator - 1, tf.float32)), reshaped_data - mean, v / (s + eps))
+    return whitened_data
 

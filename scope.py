@@ -75,8 +75,6 @@ def variables(instance_or_instance_method, key=tf.GraphKeys.TRAINABLE_VARIABLES)
     else:
         raise TypeError('Object does not appear to be an instance or instance method.')
 
-    
-
 #def get_hyperparam(*args, **kwargs):
 #    kwargs['trainable'] = False
 #    if 'collections' not in kwargs:
